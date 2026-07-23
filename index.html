@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10131c" />
+    <title>autoDJ — House transition lab</title>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <p class="eyebrow">AUTO MIX LAB / HOUSE MVP</p>
+        <h1>Два трека.<br /><em>Один грув.</em></h1>
+        <p class="hero-copy">Локальный DJ-прототип: определяет темп, выравнивает биты и делает EQ-переход по фразам.</p>
+        <div class="status-pill" id="status" aria-live="polite"><span></span>Загрузите два трека</div>
+      </header>
+
+      <section class="deck-grid" aria-label="Деки">
+        <article class="deck deck-a">
+          <div class="deck-title"><span>01</span><p>Исходный трек</p><strong>A</strong></div>
+          <label class="drop-zone" id="drop-a" for="file-a">
+            <input id="file-a" type="file" accept="audio/*" />
+            <span class="upload-icon">↗</span>
+            <span class="file-label">Выбрать аудиофайл</span>
+            <span class="file-name" id="name-a">MP3, WAV, M4A</span>
+          </label>
+          <div class="track-meta">
+            <div><span>BPM</span><strong id="bpm-a">—</strong></div>
+            <div><span>Beatgrid</span><strong id="grid-a">—</strong></div>
+            <div><span>Длина</span><strong id="length-a">—</strong></div>
+          </div>
+          <canvas id="wave-a" width="700" height="120" aria-label="Волна трека A"></canvas>
+          <div class="wave-readout"><span id="position-a">—</span><span id="deck-state-a">OFFLINE</span></div>
+          <p class="deck-caption" id="caption-a">Автоматически выберем выходную фразу.</p>
+        </article>
+
+        <article class="deck deck-b">
+          <div class="deck-title"><span>02</span><p>Входящий трек</p><strong>B</strong></div>
+          <label class="drop-zone" id="drop-b" for="file-b">
+            <input id="file-b" type="file" accept="audio/*" />
+            <span class="upload-icon">↗</span>
+            <span class="file-label">Выбрать аудиофайл</span>
+            <span class="file-name" id="name-b">MP3, WAV, M4A</span>
+          </label>
+          <div class="track-meta">
+            <div><span>BPM</span><strong id="bpm-b">—</strong></div>
+            <div><span>Вход B</span><strong id="entry-b">—</strong></div>
+            <div><span>Длина</span><strong id="length-b">—</strong></div>
+          </div>
+          <canvas id="wave-b" width="700" height="120" aria-label="Волна трека B"></canvas>
+          <div class="wave-readout"><span id="position-b">—</span><span id="deck-state-b">OFFLINE</span></div>
+          <p class="deck-caption" id="caption-b">Автоматически выберем перкуссионное интро.</p>
+        </article>
+      </section>
+
+      <section class="mix-console" aria-label="Управление переходом">
+        <div class="console-heading">
+          <div><p class="eyebrow">AUTOMATION</p><h2>Автоматический переход</h2></div>
+          <div class="sync-lock" id="sync-lock">ANALYSIS PENDING</div>
+        </div>
+        <div class="eq-plan">
+          <div class="eq-row out"><span>TRACK A</span><i class="low">LOW −</i><i>MID −</i><i>HIGH −</i><b>OUT</b></div>
+          <div class="eq-line"><span></span><hr /><span>⇄</span><hr /><span></span></div>
+          <div class="eq-row in"><span>TRACK B</span><i class="low">LOW +</i><i>MID +</i><i>HIGH +</i><b>IN</b></div>
+        </div>
+        <div class="actions">
+          <button class="main-button" id="auto-mix" disabled><span>▶</span> Запустить Auto Mix</button>
+          <button class="stop-button" id="stop" disabled>Остановить</button>
+          <p id="mix-note">Оба трека должны быть загружены.</p>
+        </div>
+      </section>
+
+      <section class="how-it-works">
+        <span>Как это работает</span>
+        <p>Движок строит beatgrid, рассчитывает скорость B и выбирает входную фразу с наиболее выраженным ритмическим рисунком. Цветная линия показывает автоматически выбранную точку входа B, светлая — текущую позицию воспроизведения.</p>
+        <small>В продакшене анализ должен выполняться сервером при добавлении трека в каталог: это позволит использовать модели структуры композиции и вокала, не нагружая устройство слушателя.</small>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
