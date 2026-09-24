@@ -6,8 +6,10 @@ import {
 } from './mixer.js';
 import { analyzeBuffer } from './analyze-audio.js';
 
-// Curated demo queue. music/ is gitignored and served straight from the dev root,
-// so tracks are fetched by URL rather than bundled. Edit this list to reorder the set.
+// Curated demo queue. Files live in public/music/ so Vite copies them into dist/
+// verbatim on build (anything outside public/ is dropped from the production build,
+// which is why these must not move back to a plain root-level music/ folder).
+// Fetched by URL rather than bundled. Edit this list to reorder the set.
 const LIBRARY = [
   { file: 'Fisher_-_Losing_It_76934851.mp3', artist: 'Fisher', title: 'Losing It' },
   { file: 'Fisher_-_Stop_It_82000120.mp3', artist: 'Fisher', title: 'Stop It' },
@@ -70,11 +72,9 @@ const deckOutroStart = (deck, duration) => outroStart(deck, duration, (k) => phr
 const soloLevel = (i) => (i === 0 ? 1 : clamp(state.decks[0].rms / state.decks[i].rms, 0.5, 2.0));
 
 // ---- load & analyze the whole set up front ----------------------------------
-// music/ is gitignored and served straight from the dev root, so the curated demo
-// tracks only exist on machines that have them locally — anyone else opens this with
-// an empty library. Missing files are skipped rather than treated as fatal, so the
-// player always lands in a usable state: either the curated set, or an empty queue
-// ready for uploads.
+// Curated tracks can still 404 (a fork without public/music/, a partial deploy), so
+// missing files are skipped rather than treated as fatal — the player always lands in
+// a usable state: either the curated set, or an empty queue ready for uploads.
 async function loadSet() {
   const ctx = getCtx();
   for (let i = 0; i < LIBRARY.length; i += 1) {
