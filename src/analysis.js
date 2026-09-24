@@ -19,7 +19,7 @@ const median = (values) => {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 };
 
-function localEnergy(data, sampleRate, time, radius) {
+export function localEnergy(data, sampleRate, time, radius) {
   const start = Math.max(0, Math.floor((time - radius) * sampleRate));
   const end = Math.min(data.length, Math.ceil((time + radius) * sampleRate));
   let energy = 0;
