@@ -57,9 +57,49 @@ export function scheduleValue(param, at, from, to, duration) {
   param.linearRampToValueAtTime(to, at + duration);
 }
 
-// A master gain feeding a limiter into the destination. The two decks overlap at
-// full level mid-transition, so the limiter catches peaks above ~-1.5 dBFS instead
-// of letting the sum clip.
+// Drives a low-shelf gain (dB) as the inverse of the channel's own crossfade gain over
+// [x0, x1] (fractions of the transition), so the kick and bass hold their solo level for
+// as long as this channel owns the low end. Without it the equal-power fade drags the lone
+// kick down to -3 dB by the swap while the other channel's bass is still cut — and bass
+// being most of a house track's energy, the whole blend sagged by ~1.4 dB in the middle.
+// Piecewise-linear because a curve event can't be split around the swap ramp.
+const BASS_HOLD_STEPS = 16;
+function holdBass(param, startTime, transitionSeconds, x0, x1, gainAt, firstIsRamp) {
+  for (let i = 0; i <= BASS_HOLD_STEPS; i += 1) {
+    const x = x0 + ((x1 - x0) * i) / BASS_HOLD_STEPS;
+    const db = -20 * Math.log10(gainAt(x));
+    const at = startTime + x * transitionSeconds;
+    if (i === 0 && !firstIsRamp) param.setValueAtTime(db, at);
+    else param.linearRampToValueAtTime(db, at);
+  }
+}
+
+// Soft-clip safety stage after the limiter. DynamicsCompressor is not a brickwall
+// limiter — its 3 ms attack lets the first transient of a hot overlap through, and a
+// dense pair measured as high as +0.5 dBFS over. Identity up to CLIP_KNEE (so anything
+// the limiter already tamed passes untouched), then a sine-shaped knee that reaches its
+// ceiling with zero slope exactly at full scale: the curve is smooth all the way, and
+// input beyond ±1 (which a WaveShaper clamps) lands on the flat part rather than
+// creating a step.
+const CLIP_KNEE = 0.85;
+const CLIP_CEILING = CLIP_KNEE + (1 - CLIP_KNEE) * (2 / Math.PI);
+const SOFT_CLIP_CURVE = (() => {
+  const points = 2049; // odd, so 0 sits on a sample
+  const curve = new Float32Array(points);
+  for (let i = 0; i < points; i += 1) {
+    const x = (2 * i) / (points - 1) - 1;
+    const a = Math.abs(x);
+    const y = a <= CLIP_KNEE
+      ? a
+      : CLIP_KNEE + (1 - CLIP_KNEE) * (2 / Math.PI) * Math.sin((Math.PI / 2) * ((a - CLIP_KNEE) / (1 - CLIP_KNEE)));
+    curve[i] = Math.sign(x) * y;
+  }
+  return curve;
+})();
+
+// A master gain feeding a limiter, then the soft-clip safety, into the destination.
+// The two decks overlap at full level mid-transition, so the limiter catches peaks
+// above ~-1.5 dBFS and the soft clip guarantees nothing leaves above CLIP_CEILING.
 export function makeMaster(context, level = 0.9) {
   const master = context.createGain();
   master.gain.value = level;
@@ -69,7 +109,9 @@ export function makeMaster(context, level = 0.9) {
   limiter.ratio.setValueAtTime(20, context.currentTime);
   limiter.attack.setValueAtTime(0.003, context.currentTime);
   limiter.release.setValueAtTime(0.25, context.currentTime);
-  master.connect(limiter).connect(context.destination);
+  const softClip = context.createWaveShaper();
+  softClip.curve = SOFT_CLIP_CURVE;
+  master.connect(limiter).connect(softClip).connect(context.destination);
   return master;
 }
 
@@ -166,17 +208,21 @@ export function scheduleCrossfade({
   out.gain.gain.setValueCurveAtTime(scaleCurve(FADE_OUT_CURVE, outLevel), startTime, transitionSeconds);
   inc.gain.gain.setValueCurveAtTime(scaleCurve(FADE_IN_CURVE, inLevel), startTime, transitionSeconds);
 
-  out.low.gain.setValueAtTime(0, startTime);
   out.mid.gain.setValueAtTime(0, startTime);
   out.high.gain.setValueAtTime(0, startTime);
-  inc.low.gain.setValueAtTime(BASS_CUT_DB, startTime);
   scheduleValue(inc.mid.gain, startTime, -4, 0, transitionSeconds * 0.5);
   scheduleValue(inc.high.gain, startTime, -6, 0, transitionSeconds * 0.5);
 
-  const swapDur = 2 * beatSeconds;
-  const swapStart = startTime + transitionSeconds * 0.5 - swapDur / 2;
-  scheduleValue(out.low.gain, swapStart, 0, BASS_CUT_DB, swapDur);
-  scheduleValue(inc.low.gain, swapStart, BASS_CUT_DB, 0, swapDur);
+  // Bass: A owns the low end until the swap, B after it. Each owner's low shelf tracks the
+  // inverse of its own fade (holdBass), and the swap itself is a 2-beat linear-dB ramp.
+  const swapHalf = beatSeconds / transitionSeconds;
+  const swapStart = startTime + transitionSeconds * (0.5 - swapHalf);
+  const swapEnd = startTime + transitionSeconds * (0.5 + swapHalf);
+  holdBass(out.low.gain, startTime, transitionSeconds, 0, 0.5 - swapHalf, (x) => Math.cos((x * Math.PI) / 2), false);
+  out.low.gain.linearRampToValueAtTime(BASS_CUT_DB, swapEnd);
+  inc.low.gain.setValueAtTime(BASS_CUT_DB, startTime);
+  inc.low.gain.setValueAtTime(BASS_CUT_DB, swapStart);
+  holdBass(inc.low.gain, startTime, transitionSeconds, 0.5 + swapHalf, 1, (x) => Math.sin((x * Math.PI) / 2), true);
 }
 
 export { clamp };
