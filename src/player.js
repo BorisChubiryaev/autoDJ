@@ -5,18 +5,22 @@ import {
   outroStart, scheduleCrossfade, clamp,
 } from './mixer.js';
 import { analyzeBuffer } from './analyze-audio.js';
+import { LIBRARY } from './library.js';
 
-// Curated demo queue. Files live in public/music/ so Vite copies them into dist/
-// verbatim on build (anything outside public/ is dropped from the production build,
-// which is why these must not move back to a plain root-level music/ folder).
-// Fetched by URL rather than bundled. Edit this list to reorder the set.
-const LIBRARY = [
-  { file: 'Fisher_-_Losing_It_76934851.mp3', artist: 'Fisher', title: 'Losing It' },
-  { file: 'Fisher_-_Stop_It_82000120.mp3', artist: 'Fisher', title: 'Stop It' },
-  { file: 'Mall_Grab_-_Pool_Party_Music_50268829.mp3', artist: 'Mall Grab', title: 'Pool Party Music' },
-  { file: 'Mall_Grab_-_Feelin_Good_55486971.mp3', artist: 'Mall Grab', title: "Feelin' Good" },
-  { file: 'Benny_Benassi_-_Satisfaction_69560247.mp3', artist: 'Benny Benassi', title: 'Satisfaction' },
-];
+// The curated tracks' beatgrid/key analysis is precomputed offline (see
+// lab/precompute-library.js) and shipped as static JSON, so loading the demo set
+// doesn't re-run the tempo/structure DSP in the browser on every page visit — only
+// decode + rms + waveform peaks happen client-side. Missing/stale entries (a track
+// added to LIBRARY without rerunning the script) fall back to live analysis.
+let libraryAnalysisPromise = null;
+function getLibraryAnalysis() {
+  if (!libraryAnalysisPromise) {
+    libraryAnalysisPromise = fetch('/music/analysis.json')
+      .then((res) => (res.ok ? res.json() : {}))
+      .catch(() => ({}));
+  }
+  return libraryAnalysisPromise;
+}
 
 const $ = (sel) => document.querySelector(sel);
 const fmt = (s) => { const v = Math.max(0, s || 0); return `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}`; };
@@ -77,6 +81,7 @@ const soloLevel = (i) => (i === 0 ? 1 : clamp(state.decks[0].rms / state.decks[i
 // a usable state: either the curated set, or an empty queue ready for uploads.
 async function loadSet() {
   const ctx = getCtx();
+  const precomputed = await getLibraryAnalysis();
   for (let i = 0; i < LIBRARY.length; i += 1) {
     const item = LIBRARY[i];
     $('#loading-detail').textContent = `${i + 1}/${LIBRARY.length} · ${item.artist} — ${item.title}`;
@@ -84,8 +89,8 @@ async function loadSet() {
       const res = await fetch(`/music/${item.file}`);
       if (!res.ok) throw new Error(`${res.status}`);
       const buffer = await ctx.decodeAudioData(await res.arrayBuffer());
-      const analysis = await analyzeBuffer(buffer);
-      state.decks.push({ ...item, ...analysis, peaks: peaks(buffer) });
+      const analysis = precomputed[item.file] ?? await analyzeBuffer(buffer);
+      state.decks.push({ ...item, ...analysis, buffer, peaks: peaks(buffer) });
     } catch (err) {
       console.warn(`Пропускаю демо-трек ${item.file}:`, err.message);
     }
