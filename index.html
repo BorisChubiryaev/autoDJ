@@ -3,80 +3,109 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#10131c" />
-    <title>autoDJ — House transition lab</title>
+    <meta name="theme-color" content="#0c0d11" />
+    <title>Auto Mix Radio — концепт плеера</title>
   </head>
   <body>
-    <main class="app-shell">
-      <header class="hero">
-        <p class="eyebrow">AUTO MIX LAB / HOUSE MVP</p>
-        <h1>Два трека.<br /><em>Один грув.</em></h1>
-        <p class="hero-copy">Локальный DJ-прототип: определяет темп, выравнивает биты и делает EQ-переход по фразам.</p>
-        <a class="hero-cta" href="/player.html">▶ Открыть в интерфейсе плеера<small>Тот же движок внутри концепта стриминга — бесшовный сет</small></a>
-        <div class="status-pill" id="status" aria-live="polite"><span></span>Загрузите два трека</div>
-      </header>
+    <div class="zv">
+      <aside class="zv-side">
+        <div class="zv-logo-dot"></div>
+        <nav class="zv-nav">
+          <i title="Главная">⌂</i>
+          <i class="on" title="Радио">◎</i>
+          <i title="Коллекция">♪</i>
+          <i title="Волна">≋</i>
+          <i title="Избранное">♡</i>
+        </nav>
+      </aside>
 
-      <section class="deck-grid" aria-label="Деки">
-        <article class="deck deck-a">
-          <div class="deck-title"><span>01</span><p>Исходный трек</p><strong>A</strong></div>
-          <label class="drop-zone" id="drop-a" for="file-a">
-            <input id="file-a" type="file" accept="audio/*" />
-            <span class="upload-icon">↗</span>
-            <span class="file-label">Выбрать аудиофайл</span>
-            <span class="file-name" id="name-a">MP3, WAV, M4A</span>
-          </label>
-          <div class="track-meta">
-            <div><span>BPM</span><strong id="bpm-a">—</strong></div>
-            <div><span>Beatgrid</span><strong id="grid-a">—</strong></div>
-            <div><span>Длина</span><strong id="length-a">—</strong></div>
+      <div>
+        <header class="zv-top">
+          <div class="zv-word">
+            <svg viewBox="0 0 20 20" fill="none"><path d="M10 1a9 9 0 100 18 9 9 0 000-18zm0 3.6a5.4 5.4 0 11-3.8 9.2l7.6-7.6A5.37 5.37 0 0010 4.6z" fill="currentColor"/></svg>
+            Звук
           </div>
-          <canvas id="wave-a" width="700" height="120" aria-label="Волна трека A"></canvas>
-          <div class="wave-readout"><span id="position-a">—</span><span id="deck-state-a">OFFLINE</span></div>
-          <p class="deck-caption" id="caption-a">Автоматически выберем выходную фразу.</p>
-        </article>
+          <div class="zv-search">⌕ Найти трек, подкаст, книгу…</div>
+          <span class="zv-badge">ПРОТОТИП · <b>autoDJ</b></span>
+          <button class="zv-icon-btn" id="about-btn" type="button" title="О прототипе" aria-haspopup="dialog">ⓘ</button>
+          <div class="zv-avatar"></div>
+        </header>
 
-        <article class="deck deck-b">
-          <div class="deck-title"><span>02</span><p>Входящий трек</p><strong>B</strong></div>
-          <label class="drop-zone" id="drop-b" for="file-b">
-            <input id="file-b" type="file" accept="audio/*" />
-            <span class="upload-icon">↗</span>
-            <span class="file-label">Выбрать аудиофайл</span>
-            <span class="file-name" id="name-b">MP3, WAV, M4A</span>
-          </label>
-          <div class="track-meta">
-            <div><span>BPM</span><strong id="bpm-b">—</strong></div>
-            <div><span>Вход B</span><strong id="entry-b">—</strong></div>
-            <div><span>Длина</span><strong id="length-b">—</strong></div>
-          </div>
-          <canvas id="wave-b" width="700" height="120" aria-label="Волна трека B"></canvas>
-          <div class="wave-readout"><span id="position-b">—</span><span id="deck-state-b">OFFLINE</span></div>
-          <p class="deck-caption" id="caption-b">Автоматически выберем перкуссионное интро.</p>
-        </article>
-      </section>
+        <main class="zv-main">
+          <section class="zv-head">
+            <div class="zv-cover" id="hero-cover"><div class="bars" id="hero-bars"></div></div>
+            <div>
+              <p class="zv-eyebrow">AUTO MIX RADIO · КОНЦЕПТ</p>
+              <h1>Бесшовный сет</h1>
+              <p class="zv-sub">Плеер сам сводит треки очереди: подбирает точку выхода по фразам, выравнивает темп и делает EQ-переход. Всё считается прямо в браузере.</p>
+              <button class="zv-cta" id="hero-play" disabled><span id="hero-play-ico">▶</span> <span id="hero-play-lbl">Слушать сет</span></button>
+            </div>
+          </section>
 
-      <section class="mix-console" aria-label="Управление переходом">
-        <div class="console-heading">
-          <div><p class="eyebrow">AUTOMATION</p><h2>Автоматический переход</h2></div>
-          <div class="sync-lock" id="sync-lock">ANALYSIS PENDING</div>
-        </div>
-        <div class="eq-plan">
-          <div class="eq-row out"><span>TRACK A</span><i class="low">LOW −</i><i>MID −</i><i>HIGH −</i><b>OUT</b></div>
-          <div class="eq-line"><span></span><hr /><span>⇄</span><hr /><span></span></div>
-          <div class="eq-row in"><span>TRACK B</span><i class="low">LOW +</i><i>MID +</i><i>HIGH +</i><b>IN</b></div>
-        </div>
-        <div class="actions">
-          <button class="main-button" id="auto-mix" disabled><span>▶</span> Запустить Auto Mix</button>
-          <button class="stop-button" id="stop" disabled>Остановить</button>
-          <p id="mix-note">Оба трека должны быть загружены.</p>
-        </div>
-      </section>
+          <section>
+            <div class="zv-qhead">
+              <span>#</span><span>Трек</span><span>Темп</span><span>Тональность</span><span>Длина</span>
+            </div>
+            <label class="zv-upload-row" for="file-upload">
+              <span class="zv-upload-ico">+</span>
+              <span>Добавить свои треки (MP3, WAV, M4A)</span>
+              <span class="zv-upload-status" id="upload-status"></span>
+              <input type="file" id="file-upload" accept="audio/*" multiple hidden />
+            </label>
+            <div id="queue"></div>
+            <div class="zv-loading" id="loading">
+              <div class="ring"></div>
+              <div>Готовлю сет — анализирую beatgrid и тональность…<br /><small id="loading-detail">старт</small></div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
 
-      <section class="how-it-works">
-        <span>Как это работает</span>
-        <p>Движок строит beatgrid, рассчитывает скорость B и выбирает входную фразу с наиболее выраженным ритмическим рисунком. Цветная линия показывает автоматически выбранную точку входа B, светлая — текущую позицию воспроизведения.</p>
-        <small>В продакшене анализ должен выполняться сервером при добавлении трека в каталог: это позволит использовать модели структуры композиции и вокала, не нагружая устройство слушателя.</small>
-      </section>
-    </main>
-    <script type="module" src="/src/main.js"></script>
+    <footer class="zv-bar">
+      <div class="zv-np">
+        <div class="zv-thumb" id="bar-thumb"></div>
+        <div class="zv-tt" style="min-width:0">
+          <div class="t" id="bar-title">—</div>
+          <div class="a" id="bar-artist">Загрузка сета…</div>
+        </div>
+      </div>
+
+      <div class="zv-center">
+        <div class="zv-controls">
+          <button id="prev" title="Предыдущий" disabled>⏮</button>
+          <button class="zv-play" id="play" title="Играть/пауза" disabled>▶</button>
+          <button id="next" title="Следующий" disabled>⏭</button>
+          <button class="zv-mixnow" id="mixnow" title="Перемотать к точке сведения" disabled>к сведе́нию ⏩</button>
+        </div>
+        <div class="zv-wave-wrap">
+          <span class="zv-time" id="time-cur">0:00</span>
+          <canvas class="zv-wave" id="wave" width="1200" height="88"></canvas>
+          <span class="zv-time" id="time-dur">0:00</span>
+        </div>
+      </div>
+
+      <div class="zv-right">
+        <div class="zv-amix" id="amix">
+          <span class="dot"></span>
+          <span class="lbl" id="amix-lbl">AUTO-MIX</span>
+          <span class="val" id="amix-val">ожидание</span>
+        </div>
+      </div>
+    </footer>
+
+    <div class="zv-modal-overlay" id="about-overlay" hidden>
+      <div class="zv-modal" role="dialog" aria-modal="true" aria-labelledby="about-title">
+        <button class="zv-modal-close" id="about-close" type="button" aria-label="Закрыть">×</button>
+        <p class="zv-eyebrow">AUTO MIX ENGINE</p>
+        <h2 id="about-title">О прототипе</h2>
+        <p>Локальный DJ-движок для демонстрации коллегам из стриминга: определяет темп, выравнивает биты и делает EQ-переход по фразам — без ручной подготовки треков и без сервера.</p>
+        <p>Движок строит beatgrid, рассчитывает скорость входящего трека и выбирает точку входа с наиболее выраженным ритмическим рисунком. Подсвеченная зона на волне внизу — автоматически найденная точка выхода, светлая линия — текущая позиция воспроизведения.</p>
+        <p>Загружайте свои mp3 прямо здесь — Auto Mix проанализирует их в браузере (Web Audio API) и включит в очередь наравне с демо-треками.</p>
+        <small>В продакшене такой анализ логично выполнять на сервере при добавлении трека в каталог — это даст доступ к более тяжёлым моделям структуры и вокала, не нагружая устройство слушателя.</small>
+      </div>
+    </div>
+
+    <script type="module" src="/src/player.js"></script>
   </body>
 </html>

@@ -14,8 +14,6 @@ const LIBRARY = [
   { file: 'Mall_Grab_-_Pool_Party_Music_50268829.mp3', artist: 'Mall Grab', title: 'Pool Party Music' },
   { file: 'Mall_Grab_-_Feelin_Good_55486971.mp3', artist: 'Mall Grab', title: "Feelin' Good" },
   { file: 'Benny_Benassi_-_Satisfaction_69560247.mp3', artist: 'Benny Benassi', title: 'Satisfaction' },
-  { file: 'x_Baggi_Begovic_-_If_A_Lie_Was_Love_48265316.mp3', artist: 'Tiesto ', title: 'If A Lie Was Love' },
-  { file: 'y_Tisto_-_We_Own_The_Night_48265313.mp3', artist: 'Tiesto', title: 'We Own The Night' },
 ];
 
 const $ = (sel) => document.querySelector(sel);
@@ -41,7 +39,7 @@ function peaks(buffer, n = 900) {
 
 const state = {
   ctx: null,
-  decks: [],            // analyzed tracks, aligned with LIBRARY
+  decks: [],            // analyzed tracks: curated LIBRARY entries + uploads, in play order
   commonPeriod: null,   // set tempo
   rates: [],            // per-track playbackRate to reach the set tempo
   master: null,
@@ -51,6 +49,15 @@ const state = {
   raf: null,
   currentIndex: 0,
 };
+let uploadSeq = 0;
+
+// "Artist_-_Title_12345.mp3" -> { artist, title }; falls back to the whole name.
+function parseUploadName(filename) {
+  const base = filename.replace(/\.[^./]+$/, '').replace(/_/g, ' ').trim();
+  const parts = base.split(/\s+-\s+/);
+  if (parts.length >= 2) return { artist: parts[0], title: parts.slice(1).join(' - ') };
+  return { artist: 'Загружено', title: base || filename };
+}
 
 const getCtx = () => (state.ctx || (state.ctx = new AudioContext()));
 
@@ -63,29 +70,96 @@ const deckOutroStart = (deck, duration) => outroStart(deck, duration, (k) => phr
 const soloLevel = (i) => (i === 0 ? 1 : clamp(state.decks[0].rms / state.decks[i].rms, 0.5, 2.0));
 
 // ---- load & analyze the whole set up front ----------------------------------
+// music/ is gitignored and served straight from the dev root, so the curated demo
+// tracks only exist on machines that have them locally — anyone else opens this with
+// an empty library. Missing files are skipped rather than treated as fatal, so the
+// player always lands in a usable state: either the curated set, or an empty queue
+// ready for uploads.
 async function loadSet() {
   const ctx = getCtx();
   for (let i = 0; i < LIBRARY.length; i += 1) {
     const item = LIBRARY[i];
     $('#loading-detail').textContent = `${i + 1}/${LIBRARY.length} · ${item.artist} — ${item.title}`;
-    const res = await fetch(`/music/${item.file}`);
-    if (!res.ok) throw new Error(`Не найден трек: ${item.file} (${res.status})`);
-    const buffer = await ctx.decodeAudioData(await res.arrayBuffer());
-    const analysis = await analyzeBuffer(buffer);
-    state.decks.push({ ...item, ...analysis, peaks: peaks(buffer) });
+    try {
+      const res = await fetch(`/music/${item.file}`);
+      if (!res.ok) throw new Error(`${res.status}`);
+      const buffer = await ctx.decodeAudioData(await res.arrayBuffer());
+      const analysis = await analyzeBuffer(buffer);
+      state.decks.push({ ...item, ...analysis, peaks: peaks(buffer) });
+    } catch (err) {
+      console.warn(`Пропускаю демо-трек ${item.file}:`, err.message);
+    }
   }
-  // Set tempo = median beat period; every track meets there. House tracks sit within
-  // a few percent of it, well inside the ±MAX_TEMPO_STRETCH budget.
-  const periods = state.decks.map((d) => d.beatPeriod).sort((a, b) => a - b);
-  state.commonPeriod = periods[Math.floor(periods.length / 2)];
-  state.rates = state.decks.map((d) => clamp(
-    d.beatPeriod / state.commonPeriod, 1 - MAX_TEMPO_STRETCH, 1 + MAX_TEMPO_STRETCH,
-  ));
+  finishLoad();
+}
+
+function finishLoad() {
+  if (state.decks.length && !state.commonPeriod) {
+    // Set tempo = median beat period; every track meets there. House tracks sit within
+    // a few percent of it, well inside the ±MAX_TEMPO_STRETCH budget.
+    const periods = state.decks.map((d) => d.beatPeriod).sort((a, b) => a - b);
+    state.commonPeriod = periods[Math.floor(periods.length / 2)];
+    state.rates = state.decks.map((d) => clamp(
+      d.beatPeriod / state.commonPeriod, 1 - MAX_TEMPO_STRETCH, 1 + MAX_TEMPO_STRETCH,
+    ));
+  }
   renderQueue();
   $('#loading').style.display = 'none';
-  ['#play', '#next', '#mixnow', '#hero-play'].forEach((s) => { $(s).disabled = false; });
-  $('#bar-artist').textContent = 'Готово — нажмите ▶';
-  setNowPlaying(0);
+  const hasDecks = state.decks.length > 0;
+  ['#play', '#next', '#mixnow', '#hero-play'].forEach((s) => { $(s).disabled = !hasDecks; });
+  if (hasDecks) {
+    $('#bar-artist').textContent = 'Готово — нажмите ▶';
+    setNowPlaying(0);
+  } else {
+    $('#bar-artist').textContent = 'Добавьте треки, чтобы собрать сет';
+  }
+}
+
+// ---- user uploads -------------------------------------------------------------
+// Uploaded tracks join the same deck/rate arrays the curated set uses, so every
+// downstream step (timeline, crossfade, queue UI) treats them identically.
+async function handleUpload(files) {
+  const input = $('#file-upload');
+  const status = $('#upload-status');
+  input.disabled = true;
+  const wasEmpty = state.decks.length === 0;
+  let hadError = false;
+  for (const file of files) {
+    status.textContent = `Анализирую «${file.name}»…`;
+    try {
+      const ctx = getCtx();
+      const buffer = await ctx.decodeAudioData(await file.arrayBuffer());
+      const analysis = await analyzeBuffer(buffer);
+      uploadSeq += 1;
+      const deck = {
+        file: `upload-${uploadSeq}-${file.name}`, ...parseUploadName(file.name), ...analysis, peaks: peaks(buffer),
+      };
+      if (!state.commonPeriod) state.commonPeriod = deck.beatPeriod;
+      state.decks.push(deck);
+      state.rates.push(clamp(
+        deck.beatPeriod / state.commonPeriod, 1 - MAX_TEMPO_STRETCH, 1 + MAX_TEMPO_STRETCH,
+      ));
+    } catch (err) {
+      console.error(err);
+      hadError = true;
+      status.textContent = `Не удалось разобрать «${file.name}»: ${err.message}`;
+    }
+  }
+  if (!hadError) status.textContent = '';
+  input.value = '';
+  input.disabled = false;
+  renderQueue();
+  const hasDecks = state.decks.length > 0;
+  ['#play', '#next', '#mixnow', '#hero-play'].forEach((s) => { $(s).disabled = !hasDecks; });
+  if (wasEmpty && hasDecks) { setNowPlaying(0); $('#bar-artist').textContent = 'Готово — нажмите ▶'; }
+  // If a set is already playing, fold the new track(s) into the live timeline instead
+  // of only appending to the queue — same click-free reschedule used by skip/mixNow.
+  if (state.transport) {
+    const seg = currentSegment();
+    const wall = getCtx().currentTime;
+    const pos = seg.inOffset + Math.max(0, wall - seg.startWall) * seg.rate;
+    scheduleFrom(seg.i, pos);
+  }
 }
 
 // ---- timeline ---------------------------------------------------------------
@@ -311,6 +385,10 @@ function updateAmix(seg, trans, wall) {
 
 function renderQueue() {
   const q = $('#queue');
+  if (!state.decks.length) {
+    q.innerHTML = '<div class="zv-empty">Очередь пуста — добавьте треки кнопкой выше, и сет соберётся прямо в браузере.</div>';
+    return;
+  }
   q.innerHTML = state.decks.map((d, i) => {
     const key = d.keyConfident ? d.camelot : `${d.camelot}?`;
     const on = i === state.currentIndex && state.transport ? ' on' : '';
@@ -372,12 +450,33 @@ $('#next').addEventListener('click', () => skipTo((state.currentIndex || 0) + 1)
 $('#prev').addEventListener('click', () => skipTo((state.currentIndex || 0) - 1));
 $('#mixnow').addEventListener('click', () => mixNow());
 
+$('#file-upload').addEventListener('change', (e) => {
+  const files = Array.from(e.target.files || []);
+  if (files.length) handleUpload(files).catch(reportError);
+});
+const uploadRow = $('.zv-upload-row');
+['dragover', 'dragenter'].forEach((ev) => uploadRow.addEventListener(ev, (e) => { e.preventDefault(); uploadRow.classList.add('dragging'); }));
+['dragleave', 'drop'].forEach((ev) => uploadRow.addEventListener(ev, () => uploadRow.classList.remove('dragging')));
+uploadRow.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const files = Array.from(e.dataTransfer?.files || []).filter((f) => f.type.startsWith('audio/'));
+  if (files.length) handleUpload(files).catch(reportError);
+});
+
+const aboutOverlay = $('#about-overlay');
+const openAbout = () => { aboutOverlay.hidden = false; };
+const closeAbout = () => { aboutOverlay.hidden = true; };
+$('#about-btn').addEventListener('click', openAbout);
+$('#about-close').addEventListener('click', closeAbout);
+aboutOverlay.addEventListener('click', (e) => { if (e.target === aboutOverlay) closeAbout(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !aboutOverlay.hidden) closeAbout(); });
+
 function reportError(err) {
   console.error(err);
   $('#bar-artist').textContent = `Ошибка: ${err.message}`;
 }
 
 loadSet().catch((err) => {
-  $('#loading').innerHTML = `<div style="color:#f77">Не удалось собрать сет.<br /><small>${err.message}</small></div>`;
-  reportError(err);
+  console.error(err);
+  finishLoad();
 });
